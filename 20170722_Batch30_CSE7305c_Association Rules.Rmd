@@ -1,0 +1,393 @@
+---
+title: "Association Rules"
+output:
+  html_document
+date: "22nd July 2017"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+**NOTE** Before starting this assignment please remember to clear your environment, you can do that by running the following code chunk
+
+```{r}
+# Remove all environmental variables
+rm(list = ls(all=T))
+
+```
+
+# Agenda
+
+* Getting the data & pre-processing it into a suitable format
+
+* Exploring the transaction data
+
+* Applying Apriori algoirhtm on transaction data
+
+* Getting frequent itemsets and rules
+
+* Inspecting and summarizing rules
+
+* Picking rules based on support and confidence
+
+* Picking rules with desired RHS or LHS / rule length, by subsetting the rules 
+
+* Plotting and visualizing the itemsets and rules
+
+
+## Requisites for working with Arules in R
+ 
+* Association rule mining can only use items and does not work with continuous                          variables
+
+* Apriori function of Arules package works with Formal tansactions class, and hence data should be formatted properly before reading it in as transaction data
+
+
+# Problem 1
+## Assoiction rule mining on Unsupervised dataset
+
+
+### Problem Description
+
+* The transaction data at a retail Point of sales system is given, with transaction ID and items bought in each transaction. We inspect the data and apply apriori method to find frequent itemsets and association rules hidden in the transactions.
+
+
+### Getting and processing data
+
+* Install the package "arules" and load it
+* Read 'Transactions.csv' such that the arules package treats the input file as "transaction" data.
+* Note: In the data, transactions should be sorted based on transaction ID
+
+```{r, echo=T}
+# Import arules
+library(arules)
+
+# Set the current working directory
+setwd("G:/ARM")
+
+# Read the data as transactional data
+read.transactions("Transactions.csv",rm.duplicates = F,format = "single",sep = ",",cols = c(1,2))->tr
+tr
+
+```
+
+## Exploring the transaction data
+### Check if data is ordered on transactionId
+### Explore and understand the data and items of transaction data
+
+```{r, echo=T}
+# inspect/explore transactions
+
+inspect(tr)
+
+```
+
+### Look at the transactions
+```{r, echo=T}
+
+tr
+
+```
+
+###  Plotting & visualizing helps a lot in manual analysis and getting a basic idea of the data. This works only for smaller datasets
+
+```{r, echo=T}
+
+image(tr)
+```
+
+### Record numbers
+
+```{r, echo=T}
+
+
+```
+
+### Plot item frequency
+
+```{r, echo=T}
+itemFrequencyPlot(tr)
+
+```
+
+## Applying Apriori algorithm on the data
+
+###  Implementing association mining using 'Apriori' algorithm to extract rules
+
+```{r, echo=T}
+
+rules<-apriori(tr,parameter = list(sup=0.2,conf=0.6,target="rules"))
+
+```
+
+### Understand the rules summary
+```{r, echo=T}
+
+summary(rules)
+
+```
+
+### Inspect the rules
+```{r, echo=T}
+
+inspect(rules)
+
+```
+
+### Visualizing the rules
+
+```{r, echo=T}
+library(arulesViz)
+plot(rules)
+
+```
+
+## Picking rules 
+
+### Picking top 5 rules sorted by confidence and then support as a data.frame.
+
+```{r, echo=T}
+
+top_rules = sort(rules,by=c("confidence","support"))
+head(as(top_rules, "data.frame"), n=5)
+
+```
+
+### Picking rules based on LHS/RHs by subsetting
+```{r, echo=T}
+
+rules.itemfilter1 <- as(subset(rules, subset = rhs %in% 
+                        "Choclates"),
+                        "data.frame")
+rules.itemfilter1 
+
+# Picking rules based on RHs = Pencil
+
+rules.itemfilter2 <- as(subset(rules,subset=rhs %in% "Pencil"),"data.frame")
+  
+rules.itemfilter2 
+
+```
+
+
+### Picking a subset of rules based on a given range of a quality measure
+
+```{r, echo=T}
+
+rules_Lift <- as(subset(rules, subset = rhs %in% "Pencil" & lift > 1.01),
+                        "data.frame")
+rules_Lift
+```
+
+
+# Problem 2 - Assoiction rule mining on Supervised dataset
+
+### Read in the titanic survival data set and see if its a categorical dataset
+
+
+```{r, echo=T}
+titanic_data <- read.csv(file = "titanic_data.csv")
+
+head(titanic_data)
+str(titanic_data)
+```
+
+### Apply Apriori on the data to find associations amongst all the attributes
+
+```{r, echo=T}
+rules <- apriori(titanic_data)
+inspect(rules)
+```
+ 
+### Rules with rhs containing target attribute
+* From the data,to find the conditions leading to survival/death of the passengers on the board, we can filter the rules for "Survived"
+
+
+```{r, echo=T}
+
+rules <- apriori(titanic_data,parameter = list(minlen=2, supp=0.005, conf=0.8),
+         appearance = list(rhs=c("Survived=No", "Survived=Yes"), default="lhs"))
+
+```
+
+### Inspect the rules
+```{r, echo=T}
+inspect(rules)
+```
+
+
+### Sort the rules based on "lift"
+```{r, echo=T}
+rules.sorted <- sort(rules, by="lift")
+inspect(rules.sorted)
+```
+
+### Pruning the rules
+* Observe that, rule 4 provides no extra information ina ddition to rule 3.
+ i.e, If all 1st class females survived, then the individuals being adults or                  children doesnot add information
+* Generally speaking, when a rule is a super rule of another rule  and the rule has the same or a higher lift, then the later rule is considered to be redundant. 
+
+```{r, echo=T}
+
+subset.matrix <- is.subset(rules.sorted, rules.sorted,sparse = FALSE)
+subset.matrix[lower.tri(subset.matrix, diag=T)] <- NA
+redundant <- colSums(subset.matrix, na.rm=T) >= 1
+which(redundant)
+````
+
+### Removing redundant rules
+
+```{r, echo=T}
+rules.pruned <- rules.sorted[!redundant]
+inspect(rules.pruned)
+````
+
+### Visualizing the pruned rules
+
+```{r, echo=T}
+library(arulesViz)
+plot(rules.pruned)
+
+
+````
+
+
+# Problem 3 - Assignment
+### Association Rules for "Flight Delay" dataset: Generate the rules and identify the patterns. 
+
+1. Read the data into R 
+
+```{r,echo=TRUE}
+
+read.csv("FlightDelays.csv",header = T,sep = ",")->fd
+fd
+```
+
+
+2. Look at the summary of all the variables and convert the following variables as factors 
+        + Weather 
+        + DAY_WEEK 
+        + Flight Status
+```{r,echo=T}
+
+dim(fd)
+str(fd)
+summary(fd)
+head(fd)
+tail(fd)
+#using as.factor()
+cols=c("Weather","DAY_WEEK","Flight.Status")
+cols
+
+fd[cols]<-lapply(fd[cols],factor)
+
+fd[cols]
+class(fd[cols])
+fd
+str(fd)
+```
+
+3. Bin the numeric variable 'CRS_DEP_TIME' into 4 bins as follows: If time is between 6 AM to 12 noon code as 1 and If the time is between 2 , etc.
+```{r,echo=T}
+
+cut(fd$CRS_DEP_TIME,breaks = c(600,1200,1300,1400,1500,1600,1700,1800,1900,2000,2100),labels = c("1","2","3","4","5","6","7","8","9","10"),right=F)->fd$bin_fd
+
+
+fd
+
+as.factor(fd$CRS_DEP_TIME)->fd$CRS_DEP_TIME
+
+```
+4. Convert the data frame in a transactions object. Look at the first 6 transactions to understand how 'arules' library requires data to be transformed. Use the below R code to view the transactions data 
+```{r,echo=T}
+as(fd,"transactions")->trans1
+
+trans1
+image(trans1)
+fd
+str(fd)
+```
+
+5. Apply 'arules' algorithm and play with various support, lift and confidence values.
+```{r,echo=T}
+library(arules)
+apriori(trans1,parameter = list(sup=0.1,conf=0.8,target="rules"))->fd_rules
+fd_rules
+
+summary(fd_rules)
+
+```
+
+6. Inspect all the rules.
+```{r,echo=T}
+inspect(fd_rules)
+
+
+
+```
+6.a)
+```{r,echo=T}
+
+library(arulesViz)
+plot(fd_rules)
+
+```
+7. Filter the rules with specific LHS and RHS conditions 
+E.g.; Filter the rules with Flighstatus=0
+```{r,echo=T}
+as(subset(fd_rules,subset=rhs %in% "Flight.Status=0"),"data.frame")->fd.fliter
+
+fd.fliter
+
+as(subset(fd_rules,subset=lhs %in% "Flight.Status=0"),"data.frame")->fd.fliterlhs
+
+fd.fliterlhs
+```
+7.a) sort by lift
+```{r,echo=T}
+
+rules.sorted <- sort(fd_rules, by="lift")
+inspect(rules.sorted)
+
+```
+
+8. Filter redundant rules if any
+```{r,echo=T}
+is.subset(rules.sorted,rules.sorted,sparse = F)->fdsubset
+
+fdsubset
+
+fdsubset[lower.tri(fdsubset,diag = T)]<-NA
+
+fdredundant<-colSums(fdsubset,na.rm = T)>=1
+which(fdredundant)
+
+#removing redundant rules
+
+rules.pruned <- rules.sorted[!fdredundant]
+inspect(rules.pruned)
+
+```
+
+9. Pot and visualize the rules
+```{r,echo=T}
+
+plot(rules.pruned)
+
+```
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
